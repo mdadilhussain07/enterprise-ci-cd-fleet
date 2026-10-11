@@ -1,0 +1,105 @@
+name: "Continuous Integration & Security Gating"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Concurrency control: Cancel redundant in-flight builds on the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # JOB 1: CODE QUALITY & AUTOMATED TESTING
+  # ============================================================================
+  test:
+    name: "Unit & Integration Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+
+      - name: "Set up Python Runtime"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip" # Automatic caching of pip packages
+
+      - name: "Install Dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: "Execute Pytest Suite"
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -v --tb=short
+
+  # ============================================================================
+  # JOB 2: STATIC SECURITY & SECRET LEAK AUDIT
+  # ============================================================================
+  security-fs:
+    name: "Filesystem & Secret Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+
+      - name: "Run Trivy Secret & Config Scan"
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          scanners: "secret,misconfig"
+          severity: "HIGH,CRITICAL"
+          exit-code: "1" # Fail the build if secrets or misconfigurations exist
+
+  # ============================================================================
+  # JOB 3: CONTAINER BUILD & IMAGE CVE GATE
+  # ============================================================================
+  build-and-scan-image:
+    name: "Docker Build & Container Audit"
+    needs: [test, security-fs] # Runs only if tests and secret scans pass
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Source Code"
+        uses: actions/checkout@v4
+
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "Build Container Image Locally"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: false # Do not push to registry yet (scanning gate first!)
+          tags: fleet-telemetry:${{ github.sha }}
+          load: true # Load built image into local Docker daemon for Trivy scanning
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: "Verify Non-Root Security Context"
+        run: |
+          USER_ID=$(docker run --rm fleet-telemetry:${{ github.sha }} id -u)
+          echo "Container runs with UID: $USER_ID"
+          if [ "$USER_ID" -eq 0 ]; then
+            echo "ERROR: Security failure! Container is executing as ROOT (UID 0)"
+            exit 1
+          fi
+
+      - name: "Scan Image for Application Vulnerabilities"
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: fleet-telemetry:${{ github.sha }}
+          scan-type: "image"
+          pkg-types: "library" # Audits our Python application packages
+          severity: "HIGH,CRITICAL"
+          exit-code: "1" # Fail build if any HIGH/CRITICAL app vulnerability exists

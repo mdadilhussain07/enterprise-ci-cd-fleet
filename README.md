@@ -1,7 +1,8 @@
 # Enterprise Fleet Telemetry: Hardened Container Architecture & CI/CD Pipeline
 
 [![CI/CD Security Gating](https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/actions/workflows/ci.yml)
-[![Container Registry](https://img.shields.io/badge/GHCR-fleet--telemetry-blue?logo=github&logoColor=white)](https://github.com/mdadilhussain07?tab=packages)
+[![GHCR Registry](https://img.shields.io/badge/GHCR-fleet--telemetry-blue?logo=github&logoColor=white)](https://github.com/mdadilhussain07?tab=packages)
+[![Docker Hub Registry](https://img.shields.io/badge/Docker%20Hub-fleet--telemetry-0db7ed?logo=docker&logoColor=white)](https://hub.docker.com/r/mdadilhussain07/fleet-telemetry)
 [![Security Hardening](https://img.shields.io/badge/Security-Non--Root%20(UID%2010001)-success?logo=shield&logoColor=white)](#security-architecture)
 [![Vulnerability Audit](https://img.shields.io/badge/Scanner-Trivy%20Gated-orange?logo=aquasec&logoColor=white)](#automated-security-gates)
 
@@ -113,9 +114,18 @@ curl -i http://localhost:8000/healthz
 docker compose down -v
 ```
 
-### Pull and Run Directly from GitHub Container Registry
+### Pull and Run from Container Registries (Dual-Distribution)
+
+#### Option A: Pull from GitHub Container Registry (GHCR)
 ```bash
 docker pull ghcr.io/mdadilhussain07/enterprise-ci-cd-fleet/fleet-telemetry:latest
 docker run -d -p 8000:8000 ghcr.io/mdadilhussain07/enterprise-ci-cd-fleet/fleet-telemetry:latest
+curl http://localhost:8000/api/v1/info
+```
+
+#### Option B: Pull from Docker Hub
+```bash
+docker pull mdadilhussain07/fleet-telemetry:latest
+docker run -d -p 8000:8000 mdadilhussain07/fleet-telemetry:latest
 curl http://localhost:8000/api/v1/info
 ```

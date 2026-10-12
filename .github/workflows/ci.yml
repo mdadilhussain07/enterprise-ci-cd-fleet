@@ -71,6 +71,8 @@ jobs:
     name: "Docker Build, Audit & Publish"
     needs: [test, security-fs]
     runs-on: ubuntu-latest
+    env:
+      DOCKERHUB_CONFIGURED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
 
     steps:
       - name: "Checkout Source Code"
@@ -131,9 +133,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Authentication 2: Docker Hub
+# Authentication 2: Docker Hub (executes only when secrets exist and not in PR)
       - name: "Log in to Docker Hub"
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && env.DOCKERHUB_CONFIGURED == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}

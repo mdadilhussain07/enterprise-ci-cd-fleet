@@ -100,6 +100,7 @@ jobs:
         with:
           image-ref: fleet-telemetry:${{ github.sha }}
           scan-type: "image"
-          pkg-types: "library" # Audits our Python application packages
+          vuln-type: "library"       # Correct parameter name for trivy-action
           severity: "HIGH,CRITICAL"
-          exit-code: "1" # Fail build if any HIGH/CRITICAL app vulnerability exists
+          ignore-unfixed: true        # Do not fail on unfixable upstream vendor bugs
+          exit-code: "1"

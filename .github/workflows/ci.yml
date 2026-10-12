@@ -139,3 +139,20 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
+# 1. Login to Docker Hub using GitHub Secrets
+      - name: "Log in to Docker Hub"
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 2. Add Docker Hub to the metadata images list:
+      - name: "Extract Docker Metadata & Tags"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}/fleet-telemetry
+            ${{ secrets.DOCKERHUB_USERNAME }}/fleet-telemetry

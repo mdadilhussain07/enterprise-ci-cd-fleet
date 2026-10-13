@@ -17,20 +17,24 @@ permissions:
 
 jobs:
   # ============================================================================
-  # JOB 1: CODE QUALITY & AUTOMATED TESTING
+  # JOB 1: MATRIX UNIT & COMPATIBILITY TESTING
   # ============================================================================
   test:
-    name: "Unit & Integration Tests"
+    name: "Unit Tests (Python ${{ matrix.python-version }})"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: "Checkout Source Code"
         uses: actions/checkout@v4
 
-      - name: "Set up Python Runtime"
+      - name: "Set up Python Runtime (${{ matrix.python-version }})"
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: "Install Dependencies"
@@ -45,31 +49,52 @@ jobs:
           python -m pytest -v --tb=short
 
   # ============================================================================
-  # JOB 2: STATIC SECURITY & SECRET LEAK AUDIT
+  # JOB 2: DEEP GIT HISTORY SECRET AUDIT (TRUFFLEHOG)
+  # ============================================================================
+  secret-scan:
+    name: "TruffleHog Deep Secret Scan"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout Complete Git History"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Mandatory: fetch entire history, not just shallow HEAD
+
+      - name: "Scan for Leaked Cryptographic Secrets"
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+  # ============================================================================
+  # JOB 3: STATIC FILESYSTEM & CONFIGURATION AUDIT
   # ============================================================================
   security-fs:
-    name: "Filesystem & Secret Scan"
+    name: "Filesystem & Docker Misconfig Scan"
     runs-on: ubuntu-latest
 
     steps:
       - name: "Checkout Source Code"
         uses: actions/checkout@v4
 
-      - name: "Run Trivy Secret & Config Scan"
+      - name: "Run Trivy Config Scan"
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: "fs"
           scan-ref: "."
-          scanners: "secret,misconfig"
+          scanners: "misconfig"
           severity: "HIGH,CRITICAL"
           exit-code: "1"
 
   # ============================================================================
-  # JOB 3: CONTAINER BUILD, AUDIT & DUAL-REGISTRY PUBLISH
+  # JOB 4: HARDENED BUILD & DUAL-REGISTRY PUBLISH
   # ============================================================================
   build-and-publish:
     name: "Docker Build, Audit & Publish"
-    needs: [test, security-fs]
+    needs: [test, secret-scan, security-fs]
     runs-on: ubuntu-latest
     env:
       DOCKERHUB_CONFIGURED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
@@ -81,14 +106,13 @@ jobs:
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
 
-      # Dual metadata target: generates tags for GHCR AND Docker Hub
       - name: "Extract Docker Metadata & Tags"
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository }}/fleet-telemetry
-            ${{ secrets.DOCKERHUB_USERNAME }}/fleet-telemetry
+            ${{ secrets.DOCKERHUB_USERNAME && format('{0}/fleet-telemetry', secrets.DOCKERHUB_USERNAME) || '' }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
@@ -124,7 +148,6 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      # Authentication 1: GitHub Container Registry
       - name: "Log in to GHCR"
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -133,7 +156,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-# Authentication 2: Docker Hub (executes only when secrets exist and not in PR)
       - name: "Log in to Docker Hub"
         if: github.event_name != 'pull_request' && env.DOCKERHUB_CONFIGURED == 'true'
         uses: docker/login-action@v3
@@ -141,7 +163,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Single unified push step: pushes the same image to both registries
       - name: "Publish Hardened Image to GHCR & Docker Hub"
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5

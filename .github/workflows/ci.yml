@@ -14,7 +14,7 @@ concurrency:
 permissions:
   contents: read
   packages: write
-
+  id-token: write  # Required for Cosign keyless signing via OIDC
 jobs:
   # ============================================================================
   # JOB 1: MATRIX UNIT & COMPATIBILITY TESTING
@@ -86,6 +86,15 @@ jobs:
           scanners: "misconfig"
           severity: "HIGH,CRITICAL"
           exit-code: "1"
+      - name: "Install Cosign (Sigstore)"
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: "Sign Published Container Image (GHCR)"
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "Signing image with keyless OIDC identity..."
+          cosign sign --yes "ghcr.io/${{ github.repository }}/fleet-telemetry:${{ steps.meta.outputs.version }}"
 
   # ============================================================================
   # JOB 4: HARDENED BUILD & DUAL-REGISTRY PUBLISH

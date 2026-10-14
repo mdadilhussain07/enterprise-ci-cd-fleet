@@ -3,8 +3,9 @@
 [![CI/CD Security Gating](https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/actions/workflows/ci.yml)
 [![GHCR Registry](https://img.shields.io/badge/GHCR-fleet--telemetry-blue?logo=github&logoColor=white)](https://github.com/mdadilhussain07?tab=packages)
 [![Docker Hub Registry](https://img.shields.io/badge/Docker%20Hub-fleet--telemetry-0db7ed?logo=docker&logoColor=white)](https://hub.docker.com/r/mdadilhussain07/fleet-telemetry)
+[![Secret Scanning](https://img.shields.io/badge/Secrets-TruffleHog%20Gated-brightgreen?logo=trufflehog&logoColor=white)](#automated-security-gates)
+[![Cosign Signed](https://img.shields.io/badge/Signature-Sigstore%20Cosign%20OIDC-purple?logo=sigstore&logoColor=white)](#cryptographic-supply-chain-security)
 [![Security Hardening](https://img.shields.io/badge/Security-Non--Root%20(UID%2010001)-success?logo=shield&logoColor=white)](#security-architecture)
-[![Vulnerability Audit](https://img.shields.io/badge/Scanner-Trivy%20Gated-orange?logo=aquasec&logoColor=white)](#automated-security-gates)
 
 Production-grade microservices container architecture and automated Continuous Integration (CI) delivery pipeline featuring **Multi-Stage Docker builds**, **least-privilege non-root execution contexts**, **dependency health gating**, and **static vulnerability gating via Trivy**.
 
@@ -95,6 +96,19 @@ The repository implements strict gating inside `.github/workflows/ci.yml`:
 | **Package Vulnerability Gate**| Scans application package manifests against Aqua Security vulnerability databases. | `exit-code: 1` on `HIGH` or `CRITICAL` findings |
 | **Promotion Gate** | OCI image publishing to GHCR is restricted to successful builds originating from `main` or semantic release tags. | Pull Requests cannot push artifacts |
 
+---
+
+## Cryptographic Supply Chain Security (Sigstore Cosign)
+
+Published OCI container images in GitHub Container Registry (GHCR) are cryptographically signed using **Sigstore Cosign** via keyless OpenID Connect (OIDC) identity.
+
+To verify the container image integrity and authenticity before deployment:
+```bash
+cosign verify \
+  --certificate-identity-regexp "[https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/](https://github.com/mdadilhussain07/enterprise-ci-cd-fleet/).*" \
+  --certificate-oidc-issuer "[https://token.actions.githubusercontent.com](https://token.actions.githubusercontent.com)" \
+  ghcr.io/mdadilhussain07/enterprise-ci-cd-fleet/fleet-telemetry:latest
+  ```
 ---
 
 ## Local Verification & Runbook

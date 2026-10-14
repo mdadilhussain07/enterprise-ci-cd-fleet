@@ -86,16 +86,7 @@ jobs:
           scanners: "misconfig"
           severity: "HIGH,CRITICAL"
           exit-code: "1"
-      - name: "Install Cosign (Sigstore)"
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3.8.1
-
-      - name: "Sign Published Container Image (GHCR)"
-        if: github.event_name != 'pull_request'
-        run: |
-          echo "Signing image with keyless OIDC identity..."
-          cosign sign --yes "ghcr.io/${{ github.repository }}/fleet-telemetry:${{ steps.meta.outputs.version }}"
-
+    
   # ============================================================================
   # JOB 4: HARDENED BUILD & DUAL-REGISTRY PUBLISH
   # ============================================================================
@@ -180,3 +171,16 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+
+      - name: "Install Cosign (Sigstore)"
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: "Sign Published Container Image in GHCR"
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Signing GHCR image with keyless OIDC identity..."
+          cosign login ghcr.io -u "${{ github.actor }}" --password "${{ secrets.GITHUB_TOKEN }}"
+          cosign sign --yes "ghcr.io/${{ github.repository }}/fleet-telemetry:latest"
